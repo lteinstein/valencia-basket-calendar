@@ -28,11 +28,11 @@ export default function Home() {
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
-  // Estados Asistentes
+  // Formulario Asistente
   const [nombreAsistente, setNombreAsistente] = useState<string>('');
   const [guardandoAsistente, setGuardandoAsistente] = useState<boolean>(false);
 
-  // Estados Nuevo Partido
+  // Formulario Nuevo Partido
   const [showModalNuevoPartido, setShowModalNuevoPartido] = useState<boolean>(false);
   const [nuevoRival, setNuevoRival] = useState<string>('');
   const [nuevaFecha, setNuevaFecha] = useState<string>('');
@@ -51,21 +51,18 @@ export default function Home() {
   async function fetchPartidos() {
     setLoading(true);
     try {
-      // 1. Obtener los partidos
       const { data: partidosData, error: partidosError } = await supabase
         .from('partidos')
         .select('*');
 
       if (partidosError) throw partidosError;
 
-      // 2. Obtener los asistentes
       const { data: asistentesData, error: asistentesError } = await supabase
         .from('asistentes')
         .select('*');
 
       if (asistentesError) throw asistentesError;
 
-      // 3. Vincular asistentes a sus partidos correspondientes
       const partidosConAsistentes = (partidosData || []).map((partido: any) => ({
         ...partido,
         asistentes: (asistentesData || []).filter((a: any) => a.partido_id === partido.id)
@@ -73,17 +70,17 @@ export default function Home() {
 
       setPartidos(partidosConAsistentes as Partido[]);
     } catch (err: any) {
-      console.error('Error al cargar datos de Supabase:', err);
+      console.error('Error Supabase:', err);
       setMensaje({ 
         tipo: 'error', 
-        texto: `Error al leer de Supabase: ${err.message || 'Comprueba las políticas RLS o claves en Vercel'}` 
+        texto: `Error base de datos: ${err.message || 'Verifica la configuración de Supabase'}` 
       });
-    } fontFinally: {
+    } finally {
       setLoading(false);
     }
   }
 
-  // --- ASISTENCIAS ---
+  // AÑADIR ASISTENTE
   const handleAgregarAsistente = async (partidoId: string) => {
     if (!nombreAsistente.trim()) {
       setMensaje({ tipo: 'error', texto: 'Por favor, escribe un nombre.' });
@@ -109,6 +106,7 @@ export default function Home() {
     }
   };
 
+  // QUITAR ASISTENTE
   const handleEliminarAsistente = async (asistenteId: string) => {
     try {
       const { error } = await supabase.from('asistentes').delete().eq('id', asistenteId);
@@ -121,7 +119,7 @@ export default function Home() {
     }
   };
 
-  // --- NUEVO PARTIDO ---
+  // CREAR Y PUBLICAR PARTIDO
   const handleCrearPartido = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nuevoRival.trim() || !nuevaFecha) {
@@ -145,7 +143,7 @@ export default function Home() {
 
       if (error) throw error;
 
-      setMensaje({ tipo: 'exito', texto: '¡Partido guardado y destacado en el calendario!' });
+      setMensaje({ tipo: 'exito', texto: '¡Partido guardado y destacado en el calendario para todos!' });
       setSelectedDate(nuevaFecha);
       setNuevoRival('');
       setNuevaFecha('');
@@ -158,6 +156,7 @@ export default function Home() {
     }
   };
 
+  // ELIMINAR PARTIDO
   const handleEliminarPartido = async (partidoId: string) => {
     if (!confirm('¿Eliminar este partido y la lista de asistentes?')) return;
 
@@ -172,7 +171,6 @@ export default function Home() {
     }
   };
 
-  // Mapeo por fecha (YYYY-MM-DD)
   const partidosMap = partidos.reduce((acc, partido) => {
     if (!partido.fecha) return acc;
     const dateKey = partido.fecha.substring(0, 10);
@@ -317,7 +315,7 @@ export default function Home() {
             })}
           </div>
 
-          {/* PANEL DETALLES DEL DÍA */}
+          {/* PANEL DETALLES DEL DÍA Y APARTADO DE ASISTENTES */}
           <div className="lg:col-span-1">
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl sticky top-6">
               <h2 className="text-xl font-bold text-slate-100 mb-4 border-b border-slate-800 pb-2">
@@ -359,7 +357,7 @@ export default function Home() {
                           </div>
                         </div>
 
-                        {/* FORMULARIO ASISTENTES */}
+                        {/* FORMULARIO AÑADIR ASISTENTE */}
                         <div className="bg-slate-800/40 p-4 rounded-xl border border-slate-700/80 space-y-3">
                           <h4 className="text-sm font-bold text-slate-200">Confirmar Asistencia</h4>
                           <div className="space-y-2">
@@ -380,10 +378,10 @@ export default function Home() {
                           </div>
                         </div>
 
-                        {/* APARTADO DE ASISTENTES LISTADOS */}
+                        {/* APARTADO EXPLICITO DE ASISTENTES */}
                         <div className="space-y-2">
                           <h4 className="text-sm font-bold text-slate-200 flex items-center justify-between">
-                            <span>Lista de Asistentes:</span>
+                            <span>¿Quién va a ir? (Asistentes):</span>
                             <span className="text-xs bg-slate-800 text-orange-400 px-2.5 py-0.5 rounded-full border border-slate-700 font-bold">
                               {partido.asistentes ? partido.asistentes.length : 0}
                             </span>
@@ -412,7 +410,7 @@ export default function Home() {
                             </ul>
                           ) : (
                             <p className="text-slate-500 text-xs italic bg-slate-800/30 p-3 rounded-lg border border-slate-800/80 text-center">
-                              No hay asistentes inscritos para este partido.
+                              Nadie se ha anotado todavía a este partido.
                             </p>
                           )}
                         </div>
