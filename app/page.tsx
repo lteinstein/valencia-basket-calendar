@@ -16,7 +16,7 @@ interface Asistente {
 interface Partido {
   id: string;
   rival: string;
-  fecha: string; // Formato YYYY-MM-DD
+  fecha: string;
   hora?: string;
   lugar?: string;
   condicion?: 'Local' | 'Visitante';
@@ -28,11 +28,11 @@ export default function Home() {
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
-  // Estados para Asistentes
+  // Estados Asistentes
   const [nombreAsistente, setNombreAsistente] = useState<string>('');
   const [guardandoAsistente, setGuardandoAsistente] = useState<boolean>(false);
 
-  // Estados para Nuevo Partido
+  // Estados Nuevo Partido
   const [showModalNuevoPartido, setShowModalNuevoPartido] = useState<boolean>(false);
   const [nuevoRival, setNuevoRival] = useState<string>('');
   const [nuevaFecha, setNuevaFecha] = useState<string>('');
@@ -41,10 +41,7 @@ export default function Home() {
   const [nuevaCondicion, setNuevaCondicion] = useState<'Local' | 'Visitante'>('Local');
   const [guardandoPartido, setGuardandoPartido] = useState<boolean>(false);
 
-  // Notificaciones
   const [mensaje, setMensaje] = useState<{ tipo: 'exito' | 'error'; texto: string } | null>(null);
-
-  // Selector de año
   const [year, setYear] = useState<number>(new Date().getFullYear());
 
   useEffect(() => {
@@ -54,31 +51,34 @@ export default function Home() {
   async function fetchPartidos() {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      // 1. Obtener los partidos
+      const { data: partidosData, error: partidosError } = await supabase
         .from('partidos')
-        .select(`
-          id,
-          rival,
-          fecha,
-          hora,
-          lugar,
-          condicion,
-          asistentes (
-            id,
-            nombre,
-            partido_id
-          )
-        `);
+        .select('*');
 
-      if (error) {
-        const { data: partidosSimples } = await supabase.from('partidos').select('*');
-        if (partidosSimples) setPartidos(partidosSimples as Partido[]);
-      } else if (data) {
-        setPartidos(data as Partido[]);
-      }
-    } catch (err) {
-      console.error('Error al cargar datos:', err);
-    } finally {
+      if (partidosError) throw partidosError;
+
+      // 2. Obtener los asistentes
+      const { data: asistentesData, error: asistentesError } = await supabase
+        .from('asistentes')
+        .select('*');
+
+      if (asistentesError) throw asistentesError;
+
+      // 3. Vincular asistentes a sus partidos correspondientes
+      const partidosConAsistentes = (partidosData || []).map((partido: any) => ({
+        ...partido,
+        asistentes: (asistentesData || []).filter((a: any) => a.partido_id === partido.id)
+      }));
+
+      setPartidos(partidosConAsistentes as Partido[]);
+    } catch (err: any) {
+      console.error('Error al cargar datos de Supabase:', err);
+      setMensaje({ 
+        tipo: 'error', 
+        texto: `Error al leer de Supabase: ${err.message || 'Comprueba las políticas RLS o claves en Vercel'}` 
+      });
+    } fontFinally: {
       setLoading(false);
     }
   }
@@ -86,7 +86,7 @@ export default function Home() {
   // --- ASISTENCIAS ---
   const handleAgregarAsistente = async (partidoId: string) => {
     if (!nombreAsistente.trim()) {
-      setMensaje({ tipo: 'error', texto: 'Escribe tu nombre para confirmar la asistencia.' });
+      setMensaje({ tipo: 'error', texto: 'Por favor, escribe un nombre.' });
       return;
     }
     setGuardandoAsistente(true);
@@ -99,19 +99,17 @@ export default function Home() {
 
       if (error) throw error;
 
-      setMensaje({ tipo: 'exito', texto: '¡Asistencia confirmada!' });
+      setMensaje({ tipo: 'exito', texto: '¡Asistencia registrada correctamente!' });
       setNombreAsistente('');
       await fetchPartidos();
     } catch (err: any) {
-      setMensaje({ tipo: 'error', texto: err.message || 'Error al guardar asistencia.' });
+      setMensaje({ tipo: 'error', texto: `Error al guardar asistente: ${err.message}` });
     } finally {
       setGuardandoAsistente(false);
     }
   };
 
   const handleEliminarAsistente = async (asistenteId: string) => {
-    if (!confirm('¿Borrar esta asistencia?')) return;
-
     try {
       const { error } = await supabase.from('asistentes').delete().eq('id', asistenteId);
       if (error) throw error;
@@ -119,15 +117,15 @@ export default function Home() {
       setMensaje({ tipo: 'exito', texto: 'Asistencia eliminada.' });
       await fetchPartidos();
     } catch (err: any) {
-      setMensaje({ tipo: 'error', texto: err.message || 'Error al eliminar asistencia.' });
+      setMensaje({ tipo: 'error', texto: `Error al eliminar asistente: ${err.message}` });
     }
   };
 
-  // --- CREAR Y BORRAR PARTIDOS ---
+  // --- NUEVO PARTIDO ---
   const handleCrearPartido = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nuevoRival.trim() || !nuevaFecha) {
-      setMensaje({ tipo: 'error', texto: 'Indica el rival y la fecha del partido.' });
+      setMensaje({ tipo: 'error', texto: 'Rival y fecha son obligatorios.' });
       return;
     }
 
@@ -147,14 +145,14 @@ export default function Home() {
 
       if (error) throw error;
 
-      setMensaje({ tipo: 'exito', texto: '¡Partido añadido! El día ya destaca en el calendario para todos.' });
+      setMensaje({ tipo: 'exito', texto: '¡Partido guardado y destacado en el calendario!' });
       setSelectedDate(nuevaFecha);
       setNuevoRival('');
       setNuevaFecha('');
       setShowModalNuevoPartido(false);
       await fetchPartidos();
     } catch (err: any) {
-      setMensaje({ tipo: 'error', texto: err.message || 'Error al guardar el partido en la base de datos.' });
+      setMensaje({ tipo: 'error', texto: `Error al guardar partido: ${err.message}` });
     } finally {
       setGuardandoPartido(false);
     }
@@ -164,15 +162,13 @@ export default function Home() {
     if (!confirm('¿Eliminar este partido y la lista de asistentes?')) return;
 
     try {
-      await supabase.from('asistentes').delete().eq('partido_id', partidoId);
       const { error } = await supabase.from('partidos').delete().eq('id', partidoId);
-
       if (error) throw error;
 
-      setMensaje({ tipo: 'exito', texto: 'Partido eliminado correctamente.' });
+      setMensaje({ tipo: 'exito', texto: 'Partido borrado correctamente.' });
       await fetchPartidos();
     } catch (err: any) {
-      setMensaje({ tipo: 'error', texto: err.message || 'Error al borrar el partido.' });
+      setMensaje({ tipo: 'error', texto: `Error al eliminar el partido: ${err.message}` });
     }
   };
 
@@ -271,7 +267,7 @@ export default function Home() {
       ) : (
         <div className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-3 gap-8">
           
-          {/* VISTA CALENDARIO ANUAL */}
+          {/* CALENDARIO ANUAL */}
           <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-900/60 p-6 rounded-2xl border border-slate-800">
             {nombresMeses.map((mes, monthIndex) => {
               const days = getDaysInMonth(monthIndex, year);
@@ -321,27 +317,27 @@ export default function Home() {
             })}
           </div>
 
-          {/* PANEL LATERAL DE INFORMACIÓN */}
+          {/* PANEL DETALLES DEL DÍA */}
           <div className="lg:col-span-1">
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl sticky top-6">
               <h2 className="text-xl font-bold text-slate-100 mb-4 border-b border-slate-800 pb-2">
-                Información del Partido
+                Detalles del Día
               </h2>
 
               {selectedDate ? (
                 partidosDelDia && partidosDelDia.length > 0 ? (
                   <div className="space-y-6">
                     {partidosDelDia.map((partido) => (
-                      <div key={partido.id} className="space-y-5">
+                      <div key={partido.id} className="space-y-5 border-b border-slate-800/80 pb-6 last:border-0">
                         
-                        {/* TARJETA DETALLE DEL PARTIDO */}
+                        {/* DETALLES DE PARTIDO */}
                         <div className="bg-slate-800/80 p-4 rounded-xl border border-orange-500/30 relative space-y-2">
                           <button
                             onClick={() => handleEliminarPartido(partido.id)}
                             className="absolute top-3 right-3 text-xs bg-red-500/20 hover:bg-red-500 text-red-300 hover:text-white px-2 py-1 rounded transition-colors"
-                            title="Borrar partido"
+                            title="Eliminar partido"
                           >
-                            Eliminar
+                            Borrar
                           </button>
 
                           <div className="flex items-center space-x-2">
@@ -363,13 +359,13 @@ export default function Home() {
                           </div>
                         </div>
 
-                        {/* REGISTRO DE ASISTENCIA */}
+                        {/* FORMULARIO ASISTENTES */}
                         <div className="bg-slate-800/40 p-4 rounded-xl border border-slate-700/80 space-y-3">
-                          <h4 className="text-sm font-bold text-slate-200">Añadir asistente</h4>
+                          <h4 className="text-sm font-bold text-slate-200">Confirmar Asistencia</h4>
                           <div className="space-y-2">
                             <input
                               type="text"
-                              placeholder="Tu nombre..."
+                              placeholder="Nombre del asistente..."
                               value={nombreAsistente}
                               onChange={(e) => setNombreAsistente(e.target.value)}
                               className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500"
@@ -379,35 +375,35 @@ export default function Home() {
                               disabled={guardandoAsistente}
                               className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 rounded-lg text-sm transition-all shadow-md shadow-orange-500/20"
                             >
-                              {guardandoAsistente ? 'Guardando...' : 'Confirmar Asistencia'}
+                              {guardandoAsistente ? 'Añadiendo...' : 'Añadir Asistente'}
                             </button>
                           </div>
                         </div>
 
-                        {/* LISTA DE ASISTENTES */}
-                        <div>
-                          <h4 className="text-sm font-bold text-slate-200 mb-3 flex items-center justify-between">
-                            <span>Asistentes Confirmados:</span>
-                            <span className="text-xs bg-slate-800 text-orange-400 px-2 py-0.5 rounded-full border border-slate-700 font-bold">
+                        {/* APARTADO DE ASISTENTES LISTADOS */}
+                        <div className="space-y-2">
+                          <h4 className="text-sm font-bold text-slate-200 flex items-center justify-between">
+                            <span>Lista de Asistentes:</span>
+                            <span className="text-xs bg-slate-800 text-orange-400 px-2.5 py-0.5 rounded-full border border-slate-700 font-bold">
                               {partido.asistentes ? partido.asistentes.length : 0}
                             </span>
                           </h4>
 
                           {partido.asistentes && partido.asistentes.length > 0 ? (
-                            <ul className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                            <ul className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                               {partido.asistentes.map((asistente) => (
                                 <li
                                   key={asistente.id}
-                                  className="bg-slate-800/50 border border-slate-700/60 px-3.5 py-2 rounded-lg text-sm font-medium text-slate-100 flex items-center justify-between"
+                                  className="bg-slate-800/60 border border-slate-700/60 px-3 py-2 rounded-lg text-sm font-medium text-slate-100 flex items-center justify-between"
                                 >
                                   <div className="flex items-center space-x-2">
-                                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0" />
+                                    <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
                                     <span>{asistente.nombre}</span>
                                   </div>
                                   <button
                                     onClick={() => handleEliminarAsistente(asistente.id)}
                                     className="text-xs text-slate-500 hover:text-red-400 p-1 transition-colors"
-                                    title="Quitar de la lista"
+                                    title="Quitar asistente"
                                   >
                                     ✕
                                   </button>
@@ -415,8 +411,8 @@ export default function Home() {
                               ))}
                             </ul>
                           ) : (
-                            <p className="text-slate-500 text-xs italic bg-slate-800/30 p-3 rounded-lg border border-slate-800 text-center">
-                              Aún no hay personas anotadas para este partido.
+                            <p className="text-slate-500 text-xs italic bg-slate-800/30 p-3 rounded-lg border border-slate-800/80 text-center">
+                              No hay asistentes inscritos para este partido.
                             </p>
                           )}
                         </div>
@@ -426,7 +422,7 @@ export default function Home() {
                   </div>
                 ) : (
                   <div className="py-12 text-center text-slate-500">
-                    <p className="text-sm mb-4">No hay partidos programados el <span className="font-bold text-slate-300">{selectedDate}</span>.</p>
+                    <p className="text-sm mb-4">No hay partidos el <span className="font-bold text-slate-300">{selectedDate}</span>.</p>
                     <button
                       onClick={() => {
                         setNuevaFecha(selectedDate);
@@ -434,14 +430,14 @@ export default function Home() {
                       }}
                       className="bg-orange-500/20 border border-orange-500/40 text-orange-300 hover:bg-orange-500/30 font-semibold px-4 py-2 rounded-lg text-xs"
                     >
-                      + Crear Partido este día
+                      + Añadir partido este día
                     </button>
                   </div>
                 )
               ) : (
                 <div className="py-16 text-center text-slate-500 border-2 border-dashed border-slate-800 rounded-xl">
                   <p className="text-sm px-4">
-                    Selecciona cualquier día en <span className="text-orange-400 font-bold">naranja</span> para ver detalles, si es local/visitante, la hora y los asistentes.
+                    Selecciona un día en el calendario para ver la información del partido y la lista de asistentes.
                   </p>
                 </div>
               )}
@@ -451,7 +447,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* MODAL PARA AÑADIR NUEVO PARTIDO */}
+      {/* MODAL NUEVO PARTIDO */}
       {showModalNuevoPartido && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4">
