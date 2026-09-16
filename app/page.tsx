@@ -3,13 +3,12 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
-// Inicialización del cliente de Supabase
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 interface Asistente {
-  id?: string;
+  id: string;
   nombre: string;
   partido_id?: string;
 }
@@ -27,13 +26,23 @@ export default function Home() {
   const [partidos, setPartidos] = useState<Partido[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  
-  // Estado para el nombre del nuevo asistente
+
+  // Estados para Asistentes
   const [nombreAsistente, setNombreAsistente] = useState<string>('');
-  const [guardando, setGuardando] = useState<boolean>(false);
+  const [guardandoAsistente, setGuardandoAsistente] = useState<boolean>(false);
+
+  // Estados para Nuevo Partido
+  const [showModalNuevoPartido, setShowModalNuevoPartido] = useState<boolean>(false);
+  const [nuevoRival, setNuevoRival] = useState<string>('');
+  const [nuevaFecha, setNuevaFecha] = useState<string>('');
+  const [nuevaHora, setNuevaHora] = useState<string>('20:30');
+  const [nuevoLugar, setNuevoLugar] = useState<string>('La Fonteta');
+  const [guardandoPartido, setGuardandoPartido] = useState<boolean>(false);
+
+  // Mensajes de notificación
   const [mensaje, setMensaje] = useState<{ tipo: 'exito' | 'error'; texto: string } | null>(null);
 
-  // Año seleccionado para el calendario
+  // Selector de año
   const [year, setYear] = useState<number>(new Date().getFullYear());
 
   useEffect(() => {
@@ -43,7 +52,6 @@ export default function Home() {
   async function fetchPartidos() {
     setLoading(true);
     try {
-      // Consulta con join a la tabla de asistentes
       const { data, error } = await supabase
         .from('partidos')
         .select(`
@@ -60,61 +68,111 @@ export default function Home() {
         `);
 
       if (error) {
-        // Consulta alternativa si la relación directa no está definida
-        const { data: partidosSimples } = await supabase
-          .from('partidos')
-          .select('*');
-        if (partidosSimples) {
-          setPartidos(partidosSimples as Partido[]);
-        }
+        const { data: partidosSimples } = await supabase.from('partidos').select('*');
+        if (partidosSimples) setPartidos(partidosSimples as Partido[]);
       } else if (data) {
         setPartidos(data as Partido[]);
       }
     } catch (err) {
-      console.error('Error al cargar la información:', err);
+      console.error('Error al cargar datos:', err);
     } finally {
       setLoading(false);
     }
   }
 
-  // Función para registrar la asistencia a Supabase
+  // --- ASISTENCIAS ---
   const handleAgregarAsistente = async (partidoId: string) => {
     if (!nombreAsistente.trim()) {
-      setMensaje({ tipo: 'error', texto: 'Por favor, escribe tu nombre.' });
+      setMensaje({ tipo: 'error', texto: 'Escribe tu nombre para confirmar.' });
       return;
     }
-
-    setGuardando(true);
+    setGuardandoAsistente(true);
     setMensaje(null);
 
     try {
       const { error } = await supabase
         .from('asistentes')
-        .insert([
-          {
-            nombre: nombreAsistente.trim(),
-            partido_id: partidoId
-          }
-        ]);
+        .insert([{ nombre: nombreAsistente.trim(), partido_id: partidoId }]);
 
       if (error) throw error;
 
-      setMensaje({ tipo: 'exito', texto: '¡Asistencia confirmada con éxito!' });
+      setMensaje({ tipo: 'exito', texto: '¡Asistencia confirmada!' });
       setNombreAsistente('');
-      // Recargar la lista de partidos y asistentes
       await fetchPartidos();
     } catch (err: any) {
-      console.error('Error al registrar asistencia:', err);
-      setMensaje({ 
-        tipo: 'error', 
-        texto: err.message || 'Ocurrió un error al guardar. Inténtalo de nuevo.' 
-      });
+      setMensaje({ tipo: 'error', texto: err.message || 'Error al guardar asistencia.' });
     } finally {
-      setGuardando(false);
+      setGuardandoAsistente(false);
     }
   };
 
-  // Mapeo de partidos por fecha en texto (YYYY-MM-DD)
+  const handleEliminarAsistente = async (asistenteId: string) => {
+    if (!confirm('¿Seguro que quieres borrar esta asistencia?')) return;
+
+    try {
+      const { error } = await supabase.from('asistentes').delete().eq('id', asistenteId);
+      if (error) throw error;
+
+      setMensaje({ tipo: 'exito', texto: 'Asistencia eliminada.' });
+      await fetchPartidos();
+    } catch (err: any) {
+      setMensaje({ tipo: 'error', texto: err.message || 'Error al eliminar la asistencia.' });
+    }
+  };
+
+  // --- PARTIDOS ---
+  const handleCrearPartido = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nuevoRival.trim() || !nuevaFecha) {
+      setMensaje({ tipo: 'error', texto: 'Rival y fecha son obligatorios.' });
+      return;
+    }
+
+    setGuardandoPartido(true);
+    setMensaje(null);
+
+    try {
+      const { error } = await supabase.from('partidos').insert([
+        {
+          rival: nuevoRival.trim(),
+          fecha: nuevaFecha,
+          hora: nuevaHora,
+          lugar: nuevoLugar,
+        },
+      ]);
+
+      if (error) throw error;
+
+      setMensaje({ tipo: 'exito', texto: '¡Partido añadido correctamente!' });
+      setNuevoRival('');
+      setNuevaFecha('');
+      setShowModalNuevoPartido(false);
+      await fetchPartidos();
+    } catch (err: any) {
+      setMensaje({ tipo: 'error', texto: err.message || 'Error al crear el partido.' });
+    } finally {
+      setGuardandoPartido(false);
+    }
+  };
+
+  const handleEliminarPartido = async (partidoId: string) => {
+    if (!confirm('¿Seguro que quieres eliminar este partido y sus asistentes registrados?')) return;
+
+    try {
+      // Eliminar primero asistentes vinculados si no hay cascada en la BD
+      await supabase.from('asistentes').delete().eq('partido_id', partidoId);
+      const { error } = await supabase.from('partidos').delete().eq('id', partidoId);
+
+      if (error) throw error;
+
+      setMensaje({ tipo: 'exito', texto: 'Partido eliminado.' });
+      await fetchPartidos();
+    } catch (err: any) {
+      setMensaje({ tipo: 'error', texto: err.message || 'Error al borrar el partido.' });
+    }
+  };
+
+  // Mapeo por fecha
   const partidosMap = partidos.reduce((acc, partido) => {
     if (!partido.fecha) return acc;
     const dateKey = partido.fecha.substring(0, 10);
@@ -123,13 +181,11 @@ export default function Home() {
     return acc;
   }, {} as Record<string, Partido[]>);
 
-  // Lista de meses
   const nombresMeses = [
     'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
   ];
 
-  // Helper para generar los días del mes
   const getDaysInMonth = (monthIndex: number, yearNum: number) => {
     const days = [];
     const firstDay = new Date(yearNum, monthIndex, 1);
@@ -138,9 +194,7 @@ export default function Home() {
     let startingDay = firstDay.getDay() - 1;
     if (startingDay === -1) startingDay = 6;
 
-    for (let i = 0; i < startingDay; i++) {
-      days.push(null);
-    }
+    for (let i = 0; i < startingDay; i++) days.push(null);
 
     for (let day = 1; day <= lastDay.getDate(); day++) {
       const monthFormatted = String(monthIndex + 1).padStart(2, '0');
@@ -148,7 +202,6 @@ export default function Home() {
       const dateKey = `${yearNum}-${monthFormatted}-${dayFormatted}`;
       days.push({ day, dateKey });
     }
-
     return days;
   };
 
@@ -157,31 +210,55 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-slate-950 text-white p-4 md:p-8 flex flex-col items-center">
       {/* CABECERA */}
-      <header className="mb-8 text-center">
+      <header className="mb-8 text-center w-full max-w-7xl flex flex-col items-center">
         <h1 className="text-3xl md:text-5xl font-black text-orange-500 tracking-wider">
           VALENCIA BASKET
         </h1>
         <p className="text-slate-400 text-sm md:text-base mt-2">
-          Calendario Anual de Partidos y Confirmación de Asistencia
+          Calendario Anual, Gestión de Partidos y Asistencia
         </p>
 
-        {/* SELECTOR DE AÑO */}
-        <div className="flex items-center justify-center space-x-4 mt-6">
+        <div className="flex flex-wrap items-center justify-between w-full mt-6 gap-4 border-b border-slate-800 pb-6">
+          <div className="flex items-center space-x-3 mx-auto md:mx-0">
+            <button
+              onClick={() => setYear(year - 1)}
+              className="bg-slate-800 hover:bg-slate-700 text-orange-400 font-bold px-3 py-1.5 rounded-lg border border-slate-700 text-sm"
+            >
+              ← {year - 1}
+            </button>
+            <span className="text-2xl font-extrabold text-white">{year}</span>
+            <button
+              onClick={() => setYear(year + 1)}
+              className="bg-slate-800 hover:bg-slate-700 text-orange-400 font-bold px-3 py-1.5 rounded-lg border border-slate-700 text-sm"
+            >
+              {year + 1} →
+            </button>
+          </div>
+
           <button
-            onClick={() => setYear(year - 1)}
-            className="bg-slate-800 hover:bg-slate-700 text-orange-400 font-bold px-3 py-1.5 rounded-lg border border-slate-700 text-sm transition-colors"
+            onClick={() => {
+              if (selectedDate) setNuevaFecha(selectedDate);
+              setShowModalNuevoPartido(true);
+            }}
+            className="bg-orange-500 hover:bg-orange-600 text-white font-bold px-4 py-2 rounded-xl text-sm transition-all shadow-lg shadow-orange-500/20 mx-auto md:mx-0"
           >
-            ← {year - 1}
-          </button>
-          <span className="text-2xl font-extrabold text-white">{year}</span>
-          <button
-            onClick={() => setYear(year + 1)}
-            className="bg-slate-800 hover:bg-slate-700 text-orange-400 font-bold px-3 py-1.5 rounded-lg border border-slate-700 text-sm transition-colors"
-          >
-            {year + 1} →
+            + Añadir Nuevo Partido
           </button>
         </div>
       </header>
+
+      {/* MENSAJES GLOBALES */}
+      {mensaje && (
+        <div
+          className={`w-full max-w-7xl mb-6 p-3 rounded-xl text-center font-semibold text-sm ${
+            mensaje.tipo === 'exito'
+              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+              : 'bg-red-500/10 text-red-400 border border-red-500/30'
+          }`}
+        >
+          {mensaje.texto}
+        </div>
+      )}
 
       {loading ? (
         <div className="text-orange-400 font-medium my-16 animate-pulse text-lg">
@@ -189,18 +266,14 @@ export default function Home() {
         </div>
       ) : (
         <div className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
-          {/* CUADRÍCULA DEL CALENDARIO ANUAL */}
-          <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-900/60 p-6 rounded-2xl border border-slate-800 backdrop-blur-sm">
+          {/* VISTA CALENDARIO ANUAL */}
+          <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-900/60 p-6 rounded-2xl border border-slate-800">
             {nombresMeses.map((mes, monthIndex) => {
               const days = getDaysInMonth(monthIndex, year);
 
               return (
-                <div
-                  key={mes}
-                  className="bg-slate-900 border border-slate-800/80 rounded-xl p-4 shadow-md"
-                >
-                  <h3 className="text-center font-bold text-orange-400 mb-3 border-b border-slate-800 pb-1.5 text-sm uppercase tracking-wider">
+                <div key={mes} className="bg-slate-900 border border-slate-800/80 rounded-xl p-4 shadow-md">
+                  <h3 className="text-center font-bold text-orange-400 mb-3 border-b border-slate-800 pb-1.5 text-sm uppercase">
                     {mes}
                   </h3>
 
@@ -210,9 +283,7 @@ export default function Home() {
 
                   <div className="grid grid-cols-7 gap-1 text-center">
                     {days.map((item, idx) => {
-                      if (!item) {
-                        return <div key={`empty-${idx}`} className="h-7" />;
-                      }
+                      if (!item) return <div key={`empty-${idx}`} className="h-7" />;
 
                       const tienePartido = partidosMap[item.dateKey] && partidosMap[item.dateKey].length > 0;
                       const isSelected = selectedDate === item.dateKey;
@@ -245,7 +316,7 @@ export default function Home() {
             })}
           </div>
 
-          {/* PANEL LATERAL: DETALLES, BOTÓN DE ASISTIR Y LISTA DE ASISTENTES */}
+          {/* PANEL LATERAL */}
           <div className="lg:col-span-1">
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl sticky top-6">
               <h2 className="text-xl font-bold text-slate-100 mb-4 border-b border-slate-800 pb-2">
@@ -257,9 +328,16 @@ export default function Home() {
                   <div className="space-y-6">
                     {partidosDelDia.map((partido) => (
                       <div key={partido.id} className="space-y-5">
-                        {/* Detalle del partido */}
-                        <div className="bg-slate-800/80 p-4 rounded-xl border border-orange-500/30">
-                          <span className="text-xs font-extrabold text-orange-400 bg-orange-500/10 px-2.5 py-1 rounded-full border border-orange-500/20 uppercase tracking-wider">
+                        <div className="bg-slate-800/80 p-4 rounded-xl border border-orange-500/30 relative">
+                          <button
+                            onClick={() => handleEliminarPartido(partido.id)}
+                            className="absolute top-3 right-3 text-xs bg-red-500/20 hover:bg-red-500 text-red-300 hover:text-white px-2 py-1 rounded transition-colors"
+                            title="Eliminar partido"
+                          >
+                            Eliminar Partido
+                          </button>
+
+                          <span className="text-xs font-extrabold text-orange-400 bg-orange-500/10 px-2.5 py-1 rounded-full border border-orange-500/20 uppercase">
                             Partido Programado
                           </span>
                           <h3 className="text-xl font-black text-white mt-2">vs {partido.rival}</h3>
@@ -278,42 +356,28 @@ export default function Home() {
                           )}
                         </div>
 
-                        {/* FORMULARIO PARA CONFIRMAR ASISTENCIA */}
+                        {/* FORMULARIO ASISTIR */}
                         <div className="bg-slate-800/40 p-4 rounded-xl border border-slate-700/80 space-y-3">
-                          <h4 className="text-sm font-bold text-slate-200">
-                            ¿Vas a ir a este partido?
-                          </h4>
+                          <h4 className="text-sm font-bold text-slate-200">Confirmar asistencia</h4>
                           <div className="space-y-2">
                             <input
                               type="text"
                               placeholder="Escribe tu nombre..."
                               value={nombreAsistente}
                               onChange={(e) => setNombreAsistente(e.target.value)}
-                              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-orange-500 transition-colors"
+                              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-orange-500"
                             />
                             <button
                               onClick={() => handleAgregarAsistente(partido.id)}
-                              disabled={guardando}
-                              className="w-full bg-orange-500 hover:bg-orange-600 disabled:bg-orange-500/50 text-white font-bold py-2 rounded-lg text-sm transition-all shadow-md shadow-orange-500/20 active:scale-[0.98]"
+                              disabled={guardandoAsistente}
+                              className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 rounded-lg text-sm transition-all shadow-md shadow-orange-500/20"
                             >
-                              {guardando ? 'Guardando...' : 'Confirmar Asistencia'}
+                              {guardandoAsistente ? 'Guardando...' : 'Confirmar Asistencia'}
                             </button>
                           </div>
-
-                          {mensaje && (
-                            <p
-                              className={`text-xs p-2 rounded-lg text-center font-medium ${
-                                mensaje.tipo === 'exito'
-                                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
-                                  : 'bg-red-500/10 text-red-400 border border-red-500/30'
-                              }`}
-                            >
-                              {mensaje.texto}
-                            </p>
-                          )}
                         </div>
 
-                        {/* LISTA DE ASISTENTES CONFIRMADOS */}
+                        {/* LISTA ASISTENTES CON OPCIÓN DE ELIMINAR */}
                         <div>
                           <h4 className="text-sm font-bold text-slate-200 mb-3 flex items-center justify-between">
                             <span>Asistentes Confirmados:</span>
@@ -324,19 +388,28 @@ export default function Home() {
 
                           {partido.asistentes && partido.asistentes.length > 0 ? (
                             <ul className="space-y-2 max-h-52 overflow-y-auto pr-1">
-                              {partido.asistentes.map((asistente, idx) => (
+                              {partido.asistentes.map((asistente) => (
                                 <li
-                                  key={asistente.id || idx}
-                                  className="bg-slate-800/50 border border-slate-700/60 px-3.5 py-2.5 rounded-lg text-sm font-medium text-slate-100 flex items-center space-x-2"
+                                  key={asistente.id}
+                                  className="bg-slate-800/50 border border-slate-700/60 px-3.5 py-2 rounded-lg text-sm font-medium text-slate-100 flex items-center justify-between"
                                 >
-                                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0" />
-                                  <span>{asistente.nombre}</span>
+                                  <div className="flex items-center space-x-2">
+                                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0" />
+                                    <span>{asistente.nombre}</span>
+                                  </div>
+                                  <button
+                                    onClick={() => handleEliminarAsistente(asistente.id)}
+                                    className="text-xs text-slate-500 hover:text-red-400 p-1 transition-colors"
+                                    title="Quitar asistente"
+                                  >
+                                    ✕
+                                  </button>
                                 </li>
                               ))}
                             </ul>
                           ) : (
                             <p className="text-slate-500 text-xs italic bg-slate-800/30 p-3 rounded-lg border border-slate-800 text-center">
-                              Aún no hay personas registradas. ¡Sé el primero!
+                              Aún no hay personas registradas.
                             </p>
                           )}
                         </div>
@@ -345,19 +418,102 @@ export default function Home() {
                   </div>
                 ) : (
                   <div className="py-12 text-center text-slate-500">
-                    <p className="text-sm">No hay ningún partido programado para el día <span className="font-bold text-slate-300">{selectedDate}</span>.</p>
+                    <p className="text-sm mb-4">No hay partidos para el día <span className="font-bold text-slate-300">{selectedDate}</span>.</p>
+                    <button
+                      onClick={() => {
+                        setNuevaFecha(selectedDate);
+                        setShowModalNuevoPartido(true);
+                      }}
+                      className="bg-orange-500/20 border border-orange-500/40 text-orange-300 hover:bg-orange-500/30 font-semibold px-4 py-2 rounded-lg text-xs"
+                    >
+                      + Programar Partido en este día
+                    </button>
                   </div>
                 )
               ) : (
                 <div className="py-16 text-center text-slate-500 border-2 border-dashed border-slate-800 rounded-xl">
                   <p className="text-sm px-4">
-                    Selecciona cualquier día marcado en <span className="text-orange-400 font-bold">naranja</span> en el calendario para apuntarte y ver quién va.
+                    Selecciona cualquier día del calendario para ver los partidos, apuntarte o crear uno nuevo.
                   </p>
                 </div>
               )}
             </div>
           </div>
+        </div>
+      )}
 
+      {/* MODAL CREAR PARTIDO */}
+      {showModalNuevoPartido && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+              <h3 className="text-lg font-bold text-orange-400">Añadir Nuevo Partido</h3>
+              <button onClick={() => setShowModalNuevoPartido(false)} className="text-slate-400 hover:text-white">✕</button>
+            </div>
+
+            <form onSubmit={handleCrearPartido} className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">Rival:</label>
+                <input
+                  type="text"
+                  placeholder="ej. Real Madrid, FC Barcelona..."
+                  value={nuevoRival}
+                  onChange={(e) => setNuevoRival(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">Fecha (YYYY-MM-DD):</label>
+                <input
+                  type="date"
+                  value={nuevaFecha}
+                  onChange={(e) => setNuevaFecha(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Hora:</label>
+                  <input
+                    type="text"
+                    value={nuevaHora}
+                    onChange={(e) => setNuevaHora(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Lugar:</label>
+                  <input
+                    type="text"
+                    value={nuevoLugar}
+                    onChange={(e) => setNuevoLugar(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowModalNuevoPartido(false)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={guardandoPartido}
+                  className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg text-sm"
+                >
+                  {guardandoPartido ? 'Guardando...' : 'Guardar Partido'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </main>
