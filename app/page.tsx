@@ -1,10 +1,13 @@
+'app/client';
 'use client';
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+// Si por lo que sea Vercel no lee la variable, aquí puedes pegar tu URL de Supabase entre las comillas para forzarlo
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'AQUI_TU_URL_DE_SUPABASE_SI_FALLORA';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'AQUI_TU_ANON_KEY_SI_FALLORA';
+
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export default function Home() {
@@ -24,6 +27,10 @@ export default function Home() {
   }, []);
 
   async function fetchDatos() {
+    if (!supabaseUrl || supabaseUrl.includes('AQUI_TU')) {
+      console.error('Falta configurar la URL de Supabase');
+      return;
+    }
     const { data: p } = await supabase.from('partidos').select('*');
     const { data: a } = await supabase.from('asistentes').select('*');
     if (p) setPartidos(p);
@@ -36,7 +43,7 @@ export default function Home() {
 
     const { error } = await supabase.from('partidos').insert([{ rival, fecha, hora, lugar, condicion }]);
     if (error) {
-      alert('Error al guardar en Supabase: ' + error.message);
+      alert('Error en Supabase: ' + error.message);
     } else {
       alert('¡Partido guardado con éxito!');
       setRival('');
@@ -88,19 +95,19 @@ export default function Home() {
         {/* FORMULARIO CREAR PARTIDO */}
         <form onSubmit={guardarPartido} className="bg-slate-900 p-5 rounded-xl border border-slate-800 space-y-3">
           <h2 className="text-lg font-bold text-orange-400">Publicar Nuevo Partido</h2>
-          <input type="text" placeholder="Rival (ej. Real Madrid)" value={rival} onChange={e => setRival(e.target.value)} className="w-full bg-slate-800 p-2 rounded border border-slate-700 text-sm" required />
+          <input type="text" placeholder="Rival (ej. Real Madrid)" value={rival} onChange={e => setRival(e.target.value)} className="w-full bg-slate-800 p-2 rounded border border-slate-700 text-sm text-white" required />
           <div className="grid grid-cols-2 gap-2">
-            <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} className="w-full bg-slate-800 p-2 rounded border border-slate-700 text-sm" required />
-            <select value={condicion} onChange={e => setCondicion(e.target.value)} className="w-full bg-slate-800 p-2 rounded border border-slate-700 text-sm">
+            <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} className="w-full bg-slate-800 p-2 rounded border border-slate-700 text-sm text-white" required />
+            <select value={condicion} onChange={e => setCondicion(e.target.value)} className="w-full bg-slate-800 p-2 rounded border border-slate-700 text-sm text-white">
               <option value="Local">Local</option>
               <option value="Visitante">Visitante</option>
             </select>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <input type="text" placeholder="Hora" value={hora} onChange={e => setHora(e.target.value)} className="w-full bg-slate-800 p-2 rounded border border-slate-700 text-sm" />
-            <input type="text" placeholder="Lugar" value={lugar} onChange={e => setLugar(e.target.value)} className="w-full bg-slate-800 p-2 rounded border border-slate-700 text-sm" />
+            <input type="text" placeholder="Hora" value={hora} onChange={e => setHora(e.target.value)} className="w-full bg-slate-800 p-2 rounded border border-slate-700 text-sm text-white" />
+            <input type="text" placeholder="Lugar" value={lugar} onChange={e => setLugar(e.target.value)} className="w-full bg-slate-800 p-2 rounded border border-slate-700 text-sm text-white" />
           </div>
-          <button type="submit" className="w-full bg-orange-500 hover:bg-orange-600 font-bold py-2 rounded text-sm transition-colors">Guardar y Publicar</button>
+          <button type="submit" className="w-full bg-orange-500 hover:bg-orange-600 font-bold py-2 rounded text-sm transition-colors text-white">Guardar y Publicar</button>
         </form>
 
         {/* LISTADO Y CALENDARIO */}
