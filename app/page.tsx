@@ -103,7 +103,7 @@ export default function Home() {
           <button type="submit" className="w-full bg-orange-500 hover:bg-orange-600 font-bold py-2 rounded text-sm transition-colors">Guardar y Publicar</button>
         </form>
 
-        {/* LISTADO RÁPIDO Y CALENDARIO DE PRUEBA */}
+        {/* LISTADO Y CALENDARIO */}
         <div className="bg-slate-900 p-5 rounded-xl border border-slate-800 space-y-4">
           <h2 className="text-lg font-bold text-orange-400">Partidos Guardados (Selecciona fecha)</h2>
           <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
@@ -144,7 +144,7 @@ export default function Home() {
                         </div>
                         {asistenPartido.length > 0 && (
                           <ul className="space-y-1 pt-1 max-h-24 overflow-y-auto">
-                            {asistenPartido.asistenPartido || asistenPartido.map((a: any) => (
+                            {asistenPartido.map((a: any) => (
                               <li key={a.id} className="flex justify-between items-center bg-slate-900/60 px-2 py-1 rounded text-xs">
                                 <span>{a.nombre}</span>
                                 <button onClick={() => borrarAsistente(a.id)} className="text-slate-500 hover:text-red-400">✕</button>
