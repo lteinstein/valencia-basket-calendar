@@ -19,6 +19,7 @@ interface Partido {
   fecha: string; // Formato YYYY-MM-DD
   hora?: string;
   lugar?: string;
+  condicion?: 'Local' | 'Visitante';
   asistentes?: Asistente[];
 }
 
@@ -37,9 +38,10 @@ export default function Home() {
   const [nuevaFecha, setNuevaFecha] = useState<string>('');
   const [nuevaHora, setNuevaHora] = useState<string>('20:30');
   const [nuevoLugar, setNuevoLugar] = useState<string>('La Fonteta');
+  const [nuevaCondicion, setNuevaCondicion] = useState<'Local' | 'Visitante'>('Local');
   const [guardandoPartido, setGuardandoPartido] = useState<boolean>(false);
 
-  // Mensajes de notificación
+  // Notificaciones
   const [mensaje, setMensaje] = useState<{ tipo: 'exito' | 'error'; texto: string } | null>(null);
 
   // Selector de año
@@ -60,6 +62,7 @@ export default function Home() {
           fecha,
           hora,
           lugar,
+          condicion,
           asistentes (
             id,
             nombre,
@@ -83,7 +86,7 @@ export default function Home() {
   // --- ASISTENCIAS ---
   const handleAgregarAsistente = async (partidoId: string) => {
     if (!nombreAsistente.trim()) {
-      setMensaje({ tipo: 'error', texto: 'Escribe tu nombre para confirmar.' });
+      setMensaje({ tipo: 'error', texto: 'Escribe tu nombre para confirmar la asistencia.' });
       return;
     }
     setGuardandoAsistente(true);
@@ -107,7 +110,7 @@ export default function Home() {
   };
 
   const handleEliminarAsistente = async (asistenteId: string) => {
-    if (!confirm('¿Seguro que quieres borrar esta asistencia?')) return;
+    if (!confirm('¿Borrar esta asistencia?')) return;
 
     try {
       const { error } = await supabase.from('asistentes').delete().eq('id', asistenteId);
@@ -116,15 +119,15 @@ export default function Home() {
       setMensaje({ tipo: 'exito', texto: 'Asistencia eliminada.' });
       await fetchPartidos();
     } catch (err: any) {
-      setMensaje({ tipo: 'error', texto: err.message || 'Error al eliminar la asistencia.' });
+      setMensaje({ tipo: 'error', texto: err.message || 'Error al eliminar asistencia.' });
     }
   };
 
-  // --- PARTIDOS ---
+  // --- CREAR Y BORRAR PARTIDOS ---
   const handleCrearPartido = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nuevoRival.trim() || !nuevaFecha) {
-      setMensaje({ tipo: 'error', texto: 'Rival y fecha son obligatorios.' });
+      setMensaje({ tipo: 'error', texto: 'Indica el rival y la fecha del partido.' });
       return;
     }
 
@@ -138,41 +141,42 @@ export default function Home() {
           fecha: nuevaFecha,
           hora: nuevaHora,
           lugar: nuevoLugar,
+          condicion: nuevaCondicion
         },
       ]);
 
       if (error) throw error;
 
-      setMensaje({ tipo: 'exito', texto: '¡Partido añadido correctamente!' });
+      setMensaje({ tipo: 'exito', texto: '¡Partido añadido! El día ya destaca en el calendario para todos.' });
+      setSelectedDate(nuevaFecha);
       setNuevoRival('');
       setNuevaFecha('');
       setShowModalNuevoPartido(false);
       await fetchPartidos();
     } catch (err: any) {
-      setMensaje({ tipo: 'error', texto: err.message || 'Error al crear el partido.' });
+      setMensaje({ tipo: 'error', texto: err.message || 'Error al guardar el partido en la base de datos.' });
     } finally {
       setGuardandoPartido(false);
     }
   };
 
   const handleEliminarPartido = async (partidoId: string) => {
-    if (!confirm('¿Seguro que quieres eliminar este partido y sus asistentes registrados?')) return;
+    if (!confirm('¿Eliminar este partido y la lista de asistentes?')) return;
 
     try {
-      // Eliminar primero asistentes vinculados si no hay cascada en la BD
       await supabase.from('asistentes').delete().eq('partido_id', partidoId);
       const { error } = await supabase.from('partidos').delete().eq('id', partidoId);
 
       if (error) throw error;
 
-      setMensaje({ tipo: 'exito', texto: 'Partido eliminado.' });
+      setMensaje({ tipo: 'exito', texto: 'Partido eliminado correctamente.' });
       await fetchPartidos();
     } catch (err: any) {
       setMensaje({ tipo: 'error', texto: err.message || 'Error al borrar el partido.' });
     }
   };
 
-  // Mapeo por fecha
+  // Mapeo por fecha (YYYY-MM-DD)
   const partidosMap = partidos.reduce((acc, partido) => {
     if (!partido.fecha) return acc;
     const dateKey = partido.fecha.substring(0, 10);
@@ -215,7 +219,7 @@ export default function Home() {
           VALENCIA BASKET
         </h1>
         <p className="text-slate-400 text-sm md:text-base mt-2">
-          Calendario Anual, Gestión de Partidos y Asistencia
+          Calendario Oficial, Control de Partidos y Asistencia
         </p>
 
         <div className="flex flex-wrap items-center justify-between w-full mt-6 gap-4 border-b border-slate-800 pb-6">
@@ -240,14 +244,14 @@ export default function Home() {
               if (selectedDate) setNuevaFecha(selectedDate);
               setShowModalNuevoPartido(true);
             }}
-            className="bg-orange-500 hover:bg-orange-600 text-white font-bold px-4 py-2 rounded-xl text-sm transition-all shadow-lg shadow-orange-500/20 mx-auto md:mx-0"
+            className="bg-orange-500 hover:bg-orange-600 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition-all shadow-lg shadow-orange-500/20 mx-auto md:mx-0"
           >
-            + Añadir Nuevo Partido
+            + Añadir Partido
           </button>
         </div>
       </header>
 
-      {/* MENSAJES GLOBALES */}
+      {/* NOTIFICACIONES */}
       {mensaje && (
         <div
           className={`w-full max-w-7xl mb-6 p-3 rounded-xl text-center font-semibold text-sm ${
@@ -262,10 +266,11 @@ export default function Home() {
 
       {loading ? (
         <div className="text-orange-400 font-medium my-16 animate-pulse text-lg">
-          Cargando partidos de la temporada...
+          Cargando partidos...
         </div>
       ) : (
         <div className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-3 gap-8">
+          
           {/* VISTA CALENDARIO ANUAL */}
           <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-900/60 p-6 rounded-2xl border border-slate-800">
             {nombresMeses.map((mes, monthIndex) => {
@@ -305,7 +310,7 @@ export default function Home() {
                         >
                           {item.day}
                           {tienePartido && !isSelected && (
-                            <span className="absolute bottom-0.5 w-1 h-1 bg-orange-400 rounded-full" />
+                            <span className="absolute bottom-0.5 w-1.5 h-1.5 bg-orange-400 rounded-full shadow-sm shadow-orange-400" />
                           )}
                         </button>
                       );
@@ -316,11 +321,11 @@ export default function Home() {
             })}
           </div>
 
-          {/* PANEL LATERAL */}
+          {/* PANEL LATERAL DE INFORMACIÓN */}
           <div className="lg:col-span-1">
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl sticky top-6">
               <h2 className="text-xl font-bold text-slate-100 mb-4 border-b border-slate-800 pb-2">
-                Detalles y Asistencia
+                Información del Partido
               </h2>
 
               {selectedDate ? (
@@ -328,44 +333,46 @@ export default function Home() {
                   <div className="space-y-6">
                     {partidosDelDia.map((partido) => (
                       <div key={partido.id} className="space-y-5">
-                        <div className="bg-slate-800/80 p-4 rounded-xl border border-orange-500/30 relative">
+                        
+                        {/* TARJETA DETALLE DEL PARTIDO */}
+                        <div className="bg-slate-800/80 p-4 rounded-xl border border-orange-500/30 relative space-y-2">
                           <button
                             onClick={() => handleEliminarPartido(partido.id)}
                             className="absolute top-3 right-3 text-xs bg-red-500/20 hover:bg-red-500 text-red-300 hover:text-white px-2 py-1 rounded transition-colors"
-                            title="Eliminar partido"
+                            title="Borrar partido"
                           >
-                            Eliminar Partido
+                            Eliminar
                           </button>
 
-                          <span className="text-xs font-extrabold text-orange-400 bg-orange-500/10 px-2.5 py-1 rounded-full border border-orange-500/20 uppercase">
-                            Partido Programado
-                          </span>
-                          <h3 className="text-xl font-black text-white mt-2">vs {partido.rival}</h3>
-                          <p className="text-xs text-slate-300 mt-2">
-                            📅 Fecha: <span className="text-white font-medium">{partido.fecha.substring(0, 10)}</span>
-                          </p>
-                          {partido.hora && (
-                            <p className="text-xs text-slate-300 mt-1">
-                              ⏰ Hora: <span className="text-white font-medium">{partido.hora}</span>
-                            </p>
-                          )}
-                          {partido.lugar && (
-                            <p className="text-xs text-slate-300 mt-1">
-                              📍 Lugar: <span className="text-white font-medium">{partido.lugar}</span>
-                            </p>
-                          )}
+                          <div className="flex items-center space-x-2">
+                            <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border uppercase tracking-wider ${
+                              partido.condicion === 'Visitante'
+                                ? 'bg-blue-500/10 text-blue-400 border-blue-500/30'
+                                : 'bg-orange-500/10 text-orange-400 border-orange-500/30'
+                            }`}>
+                              {partido.condicion || 'Local'}
+                            </span>
+                          </div>
+
+                          <h3 className="text-2xl font-black text-white">vs {partido.rival}</h3>
+                          
+                          <div className="text-xs text-slate-300 space-y-1 pt-1">
+                            <p>📅 <span className="text-slate-400">Fecha:</span> <span className="text-white font-semibold">{partido.fecha.substring(0, 10)}</span></p>
+                            {partido.hora && <p>⏰ <span className="text-slate-400">Hora:</span> <span className="text-white font-semibold">{partido.hora}</span></p>}
+                            {partido.lugar && <p>📍 <span className="text-slate-400">Lugar:</span> <span className="text-white font-semibold">{partido.lugar}</span></p>}
+                          </div>
                         </div>
 
-                        {/* FORMULARIO ASISTIR */}
+                        {/* REGISTRO DE ASISTENCIA */}
                         <div className="bg-slate-800/40 p-4 rounded-xl border border-slate-700/80 space-y-3">
-                          <h4 className="text-sm font-bold text-slate-200">Confirmar asistencia</h4>
+                          <h4 className="text-sm font-bold text-slate-200">Añadir asistente</h4>
                           <div className="space-y-2">
                             <input
                               type="text"
-                              placeholder="Escribe tu nombre..."
+                              placeholder="Tu nombre..."
                               value={nombreAsistente}
                               onChange={(e) => setNombreAsistente(e.target.value)}
-                              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-orange-500"
+                              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500"
                             />
                             <button
                               onClick={() => handleAgregarAsistente(partido.id)}
@@ -377,11 +384,11 @@ export default function Home() {
                           </div>
                         </div>
 
-                        {/* LISTA ASISTENTES CON OPCIÓN DE ELIMINAR */}
+                        {/* LISTA DE ASISTENTES */}
                         <div>
                           <h4 className="text-sm font-bold text-slate-200 mb-3 flex items-center justify-between">
                             <span>Asistentes Confirmados:</span>
-                            <span className="text-xs bg-slate-800 text-orange-400 px-2 py-0.5 rounded-full border border-slate-700">
+                            <span className="text-xs bg-slate-800 text-orange-400 px-2 py-0.5 rounded-full border border-slate-700 font-bold">
                               {partido.asistentes ? partido.asistentes.length : 0}
                             </span>
                           </h4>
@@ -400,7 +407,7 @@ export default function Home() {
                                   <button
                                     onClick={() => handleEliminarAsistente(asistente.id)}
                                     className="text-xs text-slate-500 hover:text-red-400 p-1 transition-colors"
-                                    title="Quitar asistente"
+                                    title="Quitar de la lista"
                                   >
                                     ✕
                                   </button>
@@ -409,16 +416,17 @@ export default function Home() {
                             </ul>
                           ) : (
                             <p className="text-slate-500 text-xs italic bg-slate-800/30 p-3 rounded-lg border border-slate-800 text-center">
-                              Aún no hay personas registradas.
+                              Aún no hay personas anotadas para este partido.
                             </p>
                           )}
                         </div>
+
                       </div>
                     ))}
                   </div>
                 ) : (
                   <div className="py-12 text-center text-slate-500">
-                    <p className="text-sm mb-4">No hay partidos para el día <span className="font-bold text-slate-300">{selectedDate}</span>.</p>
+                    <p className="text-sm mb-4">No hay partidos programados el <span className="font-bold text-slate-300">{selectedDate}</span>.</p>
                     <button
                       onClick={() => {
                         setNuevaFecha(selectedDate);
@@ -426,23 +434,24 @@ export default function Home() {
                       }}
                       className="bg-orange-500/20 border border-orange-500/40 text-orange-300 hover:bg-orange-500/30 font-semibold px-4 py-2 rounded-lg text-xs"
                     >
-                      + Programar Partido en este día
+                      + Crear Partido este día
                     </button>
                   </div>
                 )
               ) : (
                 <div className="py-16 text-center text-slate-500 border-2 border-dashed border-slate-800 rounded-xl">
                   <p className="text-sm px-4">
-                    Selecciona cualquier día del calendario para ver los partidos, apuntarte o crear uno nuevo.
+                    Selecciona cualquier día en <span className="text-orange-400 font-bold">naranja</span> para ver detalles, si es local/visitante, la hora y los asistentes.
                   </p>
                 </div>
               )}
             </div>
           </div>
+
         </div>
       )}
 
-      {/* MODAL CREAR PARTIDO */}
+      {/* MODAL PARA AÑADIR NUEVO PARTIDO */}
       {showModalNuevoPartido && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4">
@@ -464,15 +473,28 @@ export default function Home() {
                 />
               </div>
 
-              <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1">Fecha (YYYY-MM-DD):</label>
-                <input
-                  type="date"
-                  value={nuevaFecha}
-                  onChange={(e) => setNuevaFecha(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500"
-                  required
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Fecha:</label>
+                  <input
+                    type="date"
+                    value={nuevaFecha}
+                    onChange={(e) => setNuevaFecha(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Condición:</label>
+                  <select
+                    value={nuevaCondicion}
+                    onChange={(e) => setNuevaCondicion(e.target.value as 'Local' | 'Visitante')}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500"
+                  >
+                    <option value="Local">Local</option>
+                    <option value="Visitante">Visitante</option>
+                  </select>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -509,7 +531,7 @@ export default function Home() {
                   disabled={guardandoPartido}
                   className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg text-sm"
                 >
-                  {guardandoPartido ? 'Guardando...' : 'Guardar Partido'}
+                  {guardandoPartido ? 'Guardando...' : 'Guardar y Publicar'}
                 </button>
               </div>
             </form>
